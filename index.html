@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ハースストーンカード生成器</title>
+    <script type="text/javascript" src="model/model.js"></script><!-- chainerで学習したモデルをjsに出力したもの -->
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.js"></script>
+    <script type="text/javascript" src="RNNLM.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+</head>
+
+<script type="text/javascript">
+    debug = "";
+    vocab_rev = {};
+    for(var i=0;i<vocab.length;i+=1){
+        vocab_rev[vocab[i]] = i;
+    }
+
+    last_output = 0;
+    last_input  = 0;
+
+    function get1(){
+        last_input = last_output;
+        last_output = rnn_next(last_input);
+        debug += vocab[last_input];
+        return last_input;
+    }
+
+    function put1(c){
+        last_input = vocab_rev[c];
+        last_output = rnn_next(last_input);
+        debug += c;
+    }
+
+    function read_until(c){
+        var str = "";
+        do {
+            var c2 = vocab[get1()];
+            str += c2;
+            if(c2=="&"){
+                return str;
+            }
+        }while(vocab[last_input]!=c);
+
+        return str;
+    }
+
+    function input_rnn(str){
+        str.split('').map(put1);
+    }
+    
+    function one_element(str){
+        if(str!=""){
+            input_rnn(" "+str+" |");
+            return str;
+        }else{
+            return read_until('|').slice(0, -1).trim();
+        }
+    }
+
+    //LSTMの初期化
+    //read_until("\n");
+    //read_until("\n");
+
+    function GenerateCard(){
+        reset_rnn();
+        last_output = 0;
+        while(!vocab[last_output].match(/[A-Z]/)){
+            last_output = Math.floor(Math.random()*vocab.length)%vocab.length;
+        }
+
+        var output = {};
+        var cardname    = $("#cardname").val();
+        var stats       = $("#stats").val();
+        var description = $("#description").val();
+
+        if(cardname!=""){
+            input_rnn(cardname+" @");
+            console.log(vocab[last_output]);
+            output.cardname = cardname;
+        }else{
+            var s = read_until("@");
+            output.cardname = s.slice(0, -1).trim();
+        }
+
+        ["hero", "race", "cardtype", "rarity", "manacost"].map(
+            function(attr){
+                output[attr] = one_element($("#"+attr).val());
+            });
+
+        if(output.cardtype=="Minion" || output.cardtype=="Weapon"){
+            output.stats = one_element(stats);
+        }
+
+        read_until("|");
+
+        if(description!=""){
+            input_rnn(description);
+            output.description = description;
+        }else{
+            output.description= "";
+        }
+
+        output.description += read_until("&").slice(0,-1);
+        
+        //var rest = read_until("\n");
+        //output.rest = rest;
+        console.log(output);
+        return output;
+    }
+
+    RARITY = {
+        "B": "Basic",
+        "C": "Common",
+        "R": "Rare",
+        "E": "Epic",
+        "L": "Legendary"
+    };
+    function show_card(output){
+        $("#o_cardname").text(output.cardname);
+        //$("#o_rarity").text(RARITY[output.rarity])
+        $("#o_mana").text(output.manacost+" mana");
+        $("#o_cardtype").text(output.hero+" "+output.cardtype);
+        $("#o_description").text(output.description);
+        var misc = output.stats+" "+output.race;
+        $("#o_misc").text((typeof output.stats === "undefined" ? "":misc)+" "+RARITY[output.rarity]);
+
+        console.log(debug);
+        debug="";
+    }
+
+</script>
+<body>
+
+
+
+<!-- <button onclick='$("#display").text(read_until("\n"))' >aaa</button> -->
+
+<div class="container">
+
+<div class="well well-lg">
+<h1 id="o_cardname"></h1>
+<h3 id="o_mana"></h3>
+<h3 id="o_cardtype"></h3>
+<h4 id="o_description"></h4>
+<h3 id="o_misc"></h3>
+
+</div>
+
+<form>
+  <div class="form-group">
+    <label for="name">Card Name:</label>
+    <input type="text" id="cardname" class="form-control">
+  </div>
+  <div class="combo_wrapper">
+    <label for="name">Hero:</label>
+    <input type="text" id="hero" list="herolist" class="form-control">
+
+    <datalist id="herolist">
+        <option value="Neutral">
+        <option value="Druid">
+        <option value="Hunter">
+        <option value="Mage">
+        <option value="Paladin">
+        <option value="Priest">
+        <option value="Rogue">
+        <option value="Shaman">
+        <option value="Warlock">
+        <option value="Warrior">
+    </datalist>
+  </div>
+
+  <div class="form-group">
+    <label for="name">Race:</label>
+    <input type="text" id="race" class="form-control" placeholder="例) Beast">
+  </div>
+
+  <div class="form-group">
+    <label for="name">Card Type:</label>
+    <input type="text" id="cardtype" list="cardtypelist" class="form-control">
+
+    <datalist id="cardtypelist">
+        <option value="Minion">
+        <option value="Spell">
+        <option value="Weapon">
+    </datalist>
+  </div>
+
+  <div class="form-group">
+    <label for="name">Rarity:</label>
+    <input type="text" id="rarity" list="raritylist" class="form-control">
+
+    <datalist id="raritylist">
+        <option value="B">
+        <option value="C">
+        <option value="R">
+        <option value="E">
+        <option value="L">
+    </datalist>
+  </div>
+
+  <div class="form-group">
+    <label for="name">Mana Cost:</label>
+    <input type="text" id="manacost" class="form-control">
+  </div>
+
+  <div class="form-group">
+    <label for="name">Attack/Health:</label>
+    <input type="text" id="stats" class="form-control" placeholder="例) 3/2">
+  </div>
+
+  <div class="form-group">
+    <label for="description">Description:</label>
+    <textarea id="description" class="form-control"></textarea>
+  </div>
+  <input type="button" value="Generate" onclick="show_card(GenerateCard())">
+</form>
+</div>
+</body>
+</html>
